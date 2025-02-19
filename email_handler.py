@@ -30,7 +30,7 @@ class EmailHandler:
     def fetch_latest_test_result(self):
         """Récupère le dernier email contenant un fichier de résultat de test envoyé par Marvin."""
         if self.mail is None:
-            return None
+            return None, None
     
         try:
             self.mail.select("inbox")
@@ -39,16 +39,16 @@ class EmailHandler:
             email_ids = messages[0].split()
     
             if not email_ids:
-                return None
+                return None, None
     
-            latest_email_id = email_ids[-1]
+            latest_email_id = email_ids[-1].decode('utf-8')  # Décode l'ID en string
+    
             status, msg_data = self.mail.fetch(latest_email_id, '(RFC822)')
     
             for response_part in msg_data:
                 if isinstance(response_part, tuple):
                     msg = email.message_from_bytes(response_part[1])
                     
-                    # Parcourir les pièces jointes
                     for part in msg.walk():
                         if part.get_content_maintype() == 'multipart':
                             continue
@@ -62,11 +62,11 @@ class EmailHandler:
                             if payload:
                                 with open(filepath, "wb") as f:
                                     f.write(payload)
-                                return filepath
-            return None
+                                return filepath, latest_email_id
+            return None, None
         except Exception as e:
             print(f"Erreur lors de la récupération du fichier: {str(e)}")
-            return None
+            return None, None
     
     def get_trace(self):
 
