@@ -5,8 +5,20 @@ class TestResultParser:
         self.results = {}
         self.current_group = None
         self.is_final_trace = "Final" in file_path
+        
+    def extract_project_name(self):
+            """Extrait le nom du projet depuis la première ligne du fichier."""
+            try:
+                with open(self.file_path, 'r', encoding='utf-8') as file:
+                    first_line = file.readline().strip()
+                    if first_line:
+                        self.project_name = first_line
+            except Exception as e:
+                print(f"Erreur lors de l'extraction du nom du projet: {str(e)}")
 
     def parse(self):
+        self.extract_project_name()
+        
         with open(self.file_path, 'r', encoding='utf-8') as file:
             content = file.readlines()
 
