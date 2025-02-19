@@ -1,3 +1,4 @@
 discord.py
 python-dotenv
 imaplib2
+tqdm
