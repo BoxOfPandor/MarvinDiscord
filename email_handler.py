@@ -27,19 +27,6 @@ class EmailHandler:
             print(f"Erreur inattendue lors de la connexion: {str(e)}")
             return None
 
-    def extract_project_name(self, email_subject):
-        """Extrait le nom du projet depuis le sujet de l'email."""
-        try:
-            # Le format attendu est "[Marvin] B-PDG-300 - LIL-3-1 - PDGD13 - 2025/02/02 23:01"
-            if "[Marvin]" in email_subject:
-                # Prend la partie après "[Marvin] "
-                parts = email_subject.split("[Marvin] ")[1].split(" - ")
-                if parts:
-                    return parts[0].strip()  # Retourne "B-PDG-300"
-        except:
-            pass
-        return "Unknown Project"
-    
     def fetch_latest_test_result(self):
         """Récupère le dernier email contenant un fichier de résultat de test envoyé par Marvin."""
         if self.mail is None:
@@ -56,15 +43,10 @@ class EmailHandler:
     
             latest_email_id = email_ids[-1]
             status, msg_data = self.mail.fetch(latest_email_id, '(RFC822)')
-            project_name = "Unknown Project"
     
             for response_part in msg_data:
                 if isinstance(response_part, tuple):
                     msg = email.message_from_bytes(response_part[1])
-                    # Extraire le nom du projet depuis le sujet
-                    subject = msg["subject"]
-                    if subject:
-                        project_name = self.extract_project_name(subject)
                     
                     # Parcourir les pièces jointes
                     for part in msg.walk():
@@ -80,11 +62,11 @@ class EmailHandler:
                             if payload:
                                 with open(filepath, "wb") as f:
                                     f.write(payload)
-                                return filepath, project_name
-            return None, None
+                                return filepath
+            return None
         except Exception as e:
             print(f"Erreur lors de la récupération du fichier: {str(e)}")
-            return None, None
+            return None
     
     def get_trace(self):
 
