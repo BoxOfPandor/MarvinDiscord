@@ -14,30 +14,25 @@ class MarvinMonitor:
         self.discord_bot = DiscordBot()
         self.last_check_time = 0
         self.check_interval = 300
+        self.last_processed_email_id = None
 
     async def process_new_results(self):
         try:
-            # Connexion à la boîte mail
             if self.email_handler.connect_to_outlook():
-                # Récupération du fichier de résultats
                 trace_file = self.email_handler.fetch_latest_test_result()
                 
                 if trace_file and os.path.exists(trace_file):
-                    # Parser le fichier
                     parser = TestResultParser(trace_file)
                     parser.parse()
                     
-                    # Formater et envoyer le message Discord
                     discord_message = parser.format_for_discord()
                     await self.discord_bot.send_test_results(discord_message)
                     
-                    # Nettoyer le fichier temporaire
                     os.remove(trace_file)
                 
-                # Déconnexion de la boîte mail
                 if self.email_handler.mail:
                     self.email_handler.mail.logout()
-
+    
         except Exception as e:
             print(f"Erreur lors du traitement : {str(e)}")
 
