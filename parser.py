@@ -21,100 +21,79 @@ class TestResultParser:
         
         with open(self.file_path, 'r', encoding='utf-8') as file:
             content = file.readlines()
-
-        current_test = None
-        error_message = None
-
-        for i, line in enumerate(content):
-            line = line.strip()
-
+    
+        current_group = None
+        i = 0
+        while i < len(content):
+            line = content[i].strip()
+    
             if not line:
+                i += 1
                 continue
-
-            # Détecter un groupe de tests (contient "tests" à la fin)
-            if " tests" in line:
-                self.current_group = line.split(" tests")[0].strip()
+    
+            # Détecter un groupe de tests
+            if " tests" in line and not line.startswith("    "):
+                current_group = line.split(" - ")[0].strip()
+                # Ajouter le groupe lui-même dans les résultats
+                self.results[current_group] = {
+                    "name": line,
+                    "passed": 100 if "OK" in line else 0,
+                    "crashed": 0,
+                    "failed": 0 if "OK" in line else 100,
+                    "error": None,
+                    "is_group": True
+                }
+                i += 1
                 continue
-
-            # Pour les traces finales (OK/KO)
-            if self.is_final_trace and ":" in line and any(status in line for status in ["OK", "KO"]):
-                test_name = line.split(":")[0].strip()
-                status = "OK" if "OK" in line else "KO"
-
-                # Récupérer le message d'erreur si KO
-                if status == "KO":
-                    error_lines = []
-                    j = i + 1
-                    while j < len(content) and content[j].strip() and not content[j].strip().endswith(": OK") and not content[j].strip().endswith(": KO"):
-                        error_lines.append(content[j].strip())
-                        j += 1
-                    error_message = "\n".join(error_lines)
-
-                if self.current_group:
-                    test_name = f"{self.current_group} / {test_name}"
-
-                self.results[test_name] = {
+    
+            # Détecter un test individuel
+            if line.startswith("    ") and (": OK" in line or ": KO" in line) and not line.startswith("      Test failure:"):
+                test_name = line.strip()
+                status = "OK" if ": OK" in line else "KO"
+                
+                full_test_name = f"{current_group} / {test_name}"
+                self.results[full_test_name] = {
                     "name": test_name,
                     "passed": 100 if status == "OK" else 0,
                     "crashed": 0,
                     "failed": 0 if status == "OK" else 100,
-                    "error": error_message if status == "KO" else None
+                    "error": None,
+                    "is_group": False
                 }
-                continue
-
-            # Pour les traces daily (pourcentages)
-            if not self.is_final_trace:
-                if line.endswith(':') and not line.startswith(' '):
-                    current_test = line[:-1]
-                    continue
-
-                if line.startswith('Passed:') and current_test:
-                    passed_line = line.split(':')[1].strip().replace(' %', '')
-                    next_line = next((l for l in content if 'Crashed:' in l), '')
-                    crashed_line = next_line.split(':')[1].strip().replace(' %', '')
-
-                    try:
-                        passed = float(passed_line)
-                        crashed = float(crashed_line)
-                        failed = 100 - passed - crashed
-
-                        self.results[current_test] = {
-                            "name": current_test,
-                            "passed": passed,
-                            "crashed": crashed,
-                            "failed": failed
-                        }
-                    except ValueError:
-                        continue
-
+    
+            # Si c'est un module sans tests individuels (comme Build status)
+            elif not line.startswith("    ") and ": " in line and ("OK" in line or "KO" in line):
+                status = "OK" if "OK" in line else "KO"
+                self.results[line] = {
+                    "name": line,
+                    "passed": 100 if status == "OK" else 0,
+                    "crashed": 0,
+                    "failed": 0 if status == "OK" else 100,
+                    "error": None,
+                    "is_group": False
+                }
+    
+            i += 1
+    
     def format_for_discord(self):
-        discord_message = f"📝 **Résultats des tests automatiques - {self.project_name}**\n\n"
-
-        current_category = None
+        discord_message = f"📝 **Résultats des tests automatiques - {self.project_name}**\n"
+    
+        current_group = None
         for test_name, test_data in self.results.items():
-            # Gérer les catégories
-            category = test_name.split(" / ")[0] if " / " in test_name else test_name
-            if category != current_category:
-                current_category = category
-                discord_message += f"\n**{category}**\n"
-
-            # Formater le résultat du test
-            passed = test_data['passed']
-            emoji = "✅" if passed == 100 else "⚠️" if test_data.get('crashed', 0) > 0 else "❌"
-            test_display_name = test_name.split(" / ")[-1] if " / " in test_name else test_name
-
-            discord_message += f"🔹 {test_display_name} - {emoji} "
-            if self.is_final_trace:
-                discord_message += "OK" if passed == 100 else "KO"
-                if test_data.get('error'):
-                    discord_message += f"\n```{test_data['error']}```"
-            else:
-                discord_message += f"{passed:.0f}% Passed"
-                if test_data.get('crashed', 0) > 0:
-                    discord_message += f" ({test_data['crashed']:.0f}% Crashed)"
-
-            discord_message += "\n"
-
+            if test_data.get("is_group", False):
+                if current_group != test_name:
+                    current_group = test_name
+                    discord_message += f"\n\n**{test_data['name']}**"
+            elif "/" in test_name:  # C'est un sous-test
+                test_display_name = test_name.split(" / ")[1]
+                passed = test_data['passed']
+                emoji = "✅" if passed == 100 else "⚠️" if test_data.get('crashed', 0) > 0 else "❌"
+                discord_message += f"🔹 {test_display_name} {emoji}\n"
+            else:  # C'est un test standalone (comme Build status)
+                if not test_name.startswith("Test failure"):
+                    emoji = "✅" if test_data['passed'] == 100 else "❌"
+                    discord_message += f"\n**{test_data['name']}** {emoji}"
+    
         return discord_message.strip()
 
 # Test du parser
