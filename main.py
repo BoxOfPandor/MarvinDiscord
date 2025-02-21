@@ -22,23 +22,24 @@ class MarvinMonitor:
         try:
             if self.email_handler.connect_to_outlook():
                 trace_file, email_id = self.email_handler.fetch_latest_test_result()
-                
+
                 if email_id and email_id != self.last_processed_email_id:
                     if trace_file and os.path.exists(trace_file):
                         parser = TestResultParser(trace_file)
                         parser.parse()
-                        
+
                         discord_message = parser.format_for_discord()
+                        #print(discord_message)
                         await self.discord_bot.send_test_results(discord_message)
-                        
+
                         os.remove(trace_file)
                         self.last_processed_email_id = email_id
                 else:
                     print("Pas de nouvelle trace à traiter")
-                
+
                 if self.email_handler.mail:
                     self.email_handler.mail.logout()
-    
+
         except Exception as e:
             print(f"Erreur lors du traitement : {str(e)}")
 
@@ -53,16 +54,16 @@ class MarvinMonitor:
         @self.discord_bot.event
         async def on_ready():
             print(f"✅ Bot connecté en tant que {self.discord_bot.user}")
-            
+
             while True:
                 current_time = time.time()
-                
+
                 if current_time - self.last_check_time >= self.check_interval:
                     print("\n🔍 Vérification des nouveaux résultats...")
                     await self.process_new_results()
                     self.last_check_time = current_time
                     print("\n✨ Prochaine vérification dans 5 minutes")
-                
+
                 # Calculer le temps restant jusqu'à la prochaine vérification
                 time_to_wait = math.ceil(self.check_interval - (time.time() - self.last_check_time))
                 await self.wait_with_progress(time_to_wait)
@@ -71,7 +72,7 @@ class MarvinMonitor:
 
 if __name__ == "__main__":
     monitor = MarvinMonitor()
-    
+
     try:
         print("🚀 Démarrage du bot Marvin...")
         asyncio.run(monitor.run())
