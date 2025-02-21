@@ -31,35 +31,39 @@ class TestResultParser:
                 i += 1
                 continue
     
-            # Détecter un groupe de tests
+            # Détecter un groupe principal (avec "tests")
             if " tests" in line and not line.startswith("    "):
-                current_group = line.split(" - ")[0].strip()
-                # Ajouter le groupe lui-même dans les résultats
+                current_group = line
                 self.results[current_group] = {
                     "name": line,
-                    "passed": 100 if "OK" in line else 0,
+                    "passed": 0,
                     "crashed": 0,
-                    "failed": 0 if "OK" in line else 100,
+                    "failed": 0,
                     "error": None,
-                    "is_group": True
+                    "is_group": True,
+                    "tests": []  # Ajout d'une liste pour stocker les tests du groupe
                 }
                 i += 1
                 continue
     
-            # Détecter un test individuel
-            if line.startswith("    ") and (": OK" in line or ": KO" in line) and not line.startswith("      Test failure:"):
-                test_name = line.strip()
-                status = "OK" if ": OK" in line else "KO"
-                
-                full_test_name = f"{current_group} / {test_name}"
-                self.results[full_test_name] = {
-                    "name": test_name,
+            # Détecter un test individuel qui appartient à un groupe
+            if " - " in line and not line.startswith("    "):
+                status = "OK" if "OK" in line else "KO"
+                test_data = {
+                    "name": line,
                     "passed": 100 if status == "OK" else 0,
                     "crashed": 0,
                     "failed": 0 if status == "OK" else 100,
                     "error": None,
                     "is_group": False
                 }
+                
+                # Si nous sommes dans un groupe, ajouter le test à ce groupe
+                if current_group and current_group in self.results:
+                    self.results[current_group]["tests"].append(test_data)
+                else:
+                    # Sinon, c'est un test standalone
+                    self.results[line] = test_data
     
             # Si c'est un module sans tests individuels (comme Build status)
             elif not line.startswith("    ") and ": " in line and ("OK" in line or "KO" in line):
@@ -74,27 +78,38 @@ class TestResultParser:
                 }
     
             i += 1
-    
+
     def format_for_discord(self):
-        discord_message = f"📝 **Résultats des tests automatiques - {self.project_name}**\n"
+        """Formate les résultats des tests pour l'affichage Discord."""
+        
+        # En-tête du message
+        message_parts = [
+            f"📝 **Résultats des tests automatiques - {self.project_name}**"
+        ]
+        
+        # Traitement des tests standalone (comme Build status)
+        standalone_tests = [
+            (name, data) for name, data in self.results.items() 
+            if not data.get("is_group") and not isinstance(data.get("tests"), list)
+        ]
+        for name, data in standalone_tests:
+            if not name.startswith("Test failure"):
+                emoji = "✅" if data['passed'] == 100 else "❌"
+                message_parts.append(f" -  {name} {emoji}")
     
-        current_group = None
-        for test_name, test_data in self.results.items():
-            if test_data.get("is_group", False):
-                if current_group != test_name:
-                    current_group = test_name
-                    discord_message += f"\n\n**{test_data['name']}**"
-            elif "/" in test_name:  # C'est un sous-test
-                test_display_name = test_name.split(" / ")[1]
-                passed = test_data['passed']
-                emoji = "✅" if passed == 100 else "⚠️" if test_data.get('crashed', 0) > 0 else "❌"
-                discord_message += f"🔹 {test_display_name} {emoji}\n"
-            else:  # C'est un test standalone (comme Build status)
-                if not test_name.startswith("Test failure"):
-                    emoji = "✅" if test_data['passed'] == 100 else "❌"
-                    discord_message += f"\n**{test_data['name']}** {emoji}"
+        # Formatage des groupes et leurs tests
+        for name, group_data in self.results.items():
+            if group_data.get("is_group"):
+                # En-tête du groupe
+                message_parts.append(f"\n**{group_data['name']}**")
+                
+                # Tests du groupe
+                for test in group_data.get("tests", []):
+                    emoji = "✅" if test['passed'] == 100 else "⚠️" if test.get('crashed', 0) > 0 else "❌"
+                    message_parts.append(f"🔹 {test['name']} {emoji}")
     
-        return discord_message.strip()
+        # Assemblage du message final
+        return "\n".join(message_parts)
 
 # Test du parser
 if __name__ == "__main__":
