@@ -64,19 +64,7 @@ class TestResultParser:
                 else:
                     # Sinon, c'est un test standalone
                     self.results[line] = test_data
-    
-            # Si c'est un module sans tests individuels (comme Build status)
-            elif not line.startswith("    ") and ": " in line and ("OK" in line or "KO" in line):
-                status = "OK" if "OK" in line else "KO"
-                self.results[line] = {
-                    "name": line,
-                    "passed": 100 if status == "OK" else 0,
-                    "crashed": 0,
-                    "failed": 0 if status == "OK" else 100,
-                    "error": None,
-                    "is_group": False
-                }
-    
+
             i += 1
 
     def format_for_discord(self):
